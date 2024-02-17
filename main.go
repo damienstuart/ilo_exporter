@@ -116,7 +116,17 @@ func errorHandler(f func(http.ResponseWriter, *http.Request) error) http.Handler
 }
 
 func handleMetricsRequest(w http.ResponseWriter, r *http.Request) error {
-	host := r.URL.Query().Get("host")
+	q := r.URL.Query()
+	host := q.Get("host")
+	user := q.Get("user")
+	pass := q.Get("pass")
+
+	if user == "" {
+		user = *username
+	}
+	if pass == "" {
+		pass = *password
+	}
 
 	ctx, span := tracer.Start(r.Context(), "HandleMetricsRequest", trace.WithAttributes(
 		attribute.String("host", host),
@@ -129,7 +139,7 @@ func handleMetricsRequest(w http.ResponseWriter, r *http.Request) error {
 
 	reg := prometheus.NewRegistry()
 
-	cl := client.NewClient(host, *username, *password, tracer, client.WithMaxConcurrentRequests(*maxConcurrentRequests), client.WithInsecure(), client.WithDebug())
+	cl := client.NewClient(host, user, pass, tracer, client.WithMaxConcurrentRequests(*maxConcurrentRequests), client.WithInsecure(), client.WithDebug())
 	reg.MustRegister(system.NewCollector(ctx, cl, tracer))
 	reg.MustRegister(manager.NewCollector(ctx, cl, tracer))
 	reg.MustRegister(chassis.NewCollector(ctx, cl, tracer))

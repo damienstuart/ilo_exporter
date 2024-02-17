@@ -7,6 +7,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/MauveSoftware/ilo_exporter/pkg/common"
 	"github.com/prometheus/client_golang/prometheus"
@@ -111,7 +112,14 @@ func collectSmartStorageController(ctx context.Context, path string, cc *common.
 	))
 	defer span.End()
 
-	p := path + "DiskDrives/"
+	// In some cases the path does not have the expected trailing slash, so
+	// we add it here if needed
+	slash := ""
+	if !strings.HasSuffix(path, "/") {
+		slash = "/"
+	}
+	p := path + slash + "DiskDrives/"
+
 	drives := common.MemberList{}
 	err := cc.Client().Get(ctx, p, &drives)
 	if err != nil {
