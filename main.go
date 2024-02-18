@@ -5,19 +5,13 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
-	"os/signal"
 
 	"github.com/MauveSoftware/ilo_exporter/pkg/chassis"
 	"github.com/MauveSoftware/ilo_exporter/pkg/client"
 	"github.com/MauveSoftware/ilo_exporter/pkg/manager"
 	"github.com/MauveSoftware/ilo_exporter/pkg/system"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -26,18 +20,6 @@ import (
 
 func main() {
 	initConfig()
-
-	if conf.Tracing.Enabled {
-		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-		defer cancel()
-
-		shutdownTracing, err := initTracing(ctx)
-		if err != nil {
-			log.Fatalf("could not initialize tracing: %v", err)
-		}
-		defer shutdownTracing()
-	}
-
 	startServer()
 }
 
@@ -93,11 +75,6 @@ func handleMetricsRequest(w http.ResponseWriter, r *http.Request) error {
 		pass = conf.Api.Password
 	}
 
-	ctx, span := tracer.Start(r.Context(), "HandleMetricsRequest", trace.WithAttributes(
-		attribute.String("host", host),
-	))
-	defer span.End()
-
 	if host == "" {
 		return fmt.Errorf("no host defined")
 	}
@@ -105,13 +82,14 @@ func handleMetricsRequest(w http.ResponseWriter, r *http.Request) error {
 	reg := prometheus.NewRegistry()
 
 	cl := client.NewClient(
-		host, user, pass, tracer, conf.Api.Debug,
+		host, user, pass, conf.Api.Debug,
 		client.WithMaxConcurrentRequests(conf.Api.MaxConcurrentRequests),
 		client.WithInsecure())
 
-	reg.MustRegister(system.NewCollector(ctx, cl, tracer))
-	reg.MustRegister(manager.NewCollector(ctx, cl, tracer))
-	reg.MustRegister(chassis.NewCollector(ctx, cl, tracer))
+	ctx := r.Context()
+	reg.MustRegister(system.NewCollector(ctx, cl))
+	reg.MustRegister(manager.NewCollector(ctx, cl))
+	reg.MustRegister(chassis.NewCollector(ctx, cl))
 
 	l := logrus.New()
 	l.Level = logrus.ErrorLevel

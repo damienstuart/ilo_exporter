@@ -11,7 +11,6 @@ import (
 	"github.com/MauveSoftware/ilo_exporter/pkg/client"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -24,18 +23,16 @@ var (
 )
 
 // NewCollector returns a new collector for manager metrics
-func NewCollector(ctx context.Context, cl client.Client, tracer trace.Tracer) prometheus.Collector {
+func NewCollector(ctx context.Context, cl client.Client) prometheus.Collector {
 	return &collector{
 		rootCtx: ctx,
 		cl:      cl,
-		tracer:  tracer,
 	}
 }
 
 type collector struct {
 	rootCtx context.Context
 	cl      client.Client
-	tracer  trace.Tracer
 }
 
 // Describe implements prometheus.Collector interface
@@ -48,13 +45,10 @@ func (c *collector) Describe(ch chan<- *prometheus.Desc) {
 func (c *collector) Collect(ch chan<- prometheus.Metric) {
 	start := time.Now()
 
-	ctx, span := c.tracer.Start(c.rootCtx, "Manager.Collect")
-	defer span.End()
-
 	p := "Managers/1"
 
 	m := &manager{}
-	err := c.cl.Get(ctx, p, &m)
+	err := c.cl.Get(c.rootCtx, p, &m)
 	if err != nil {
 		logrus.Error(err)
 		return

@@ -11,8 +11,6 @@ import (
 
 	"github.com/MauveSoftware/ilo_exporter/pkg/common"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -40,27 +38,19 @@ func Describe(ch chan<- *prometheus.Desc) {
 func Collect(parentPath string, cc *common.CollectorContext) {
 	defer cc.WaitGroup().Done()
 
-	ctx, span := cc.Tracer().Start(cc.RootCtx(), "Storage.Collect", trace.WithAttributes(
-		attribute.String("parent_path", parentPath),
-	))
-	defer span.End()
+	ctx := cc.RootCtx()
 
 	collectStorage(ctx, parentPath, cc)
 	collectSmartStorage(ctx, parentPath, cc)
 }
 
 func collectStorage(ctx context.Context, parentPath string, cc *common.CollectorContext) {
-	ctx, span := cc.Tracer().Start(ctx, "Storage.CollectStorage", trace.WithAttributes(
-		attribute.String("parent_path", parentPath),
-	))
-	defer span.End()
-
 	p := parentPath + "/Storage"
 	crtls := common.MemberList{}
 
 	err := cc.Client().Get(ctx, p, &crtls)
 	if err != nil {
-		cc.HandleError(fmt.Errorf("could not get storage controller summary: %w", err), span)
+		cc.HandleError(fmt.Errorf("could not get storage controller summary: %w", err))
 		return
 	}
 
@@ -70,15 +60,10 @@ func collectStorage(ctx context.Context, parentPath string, cc *common.Collector
 }
 
 func collectStorageController(ctx context.Context, path string, cc *common.CollectorContext) {
-	ctx, span := cc.Tracer().Start(ctx, "Storage.CollectController", trace.WithAttributes(
-		attribute.String("path", path),
-	))
-	defer span.End()
-
 	strg := StorageInfo{}
 	err := cc.Client().Get(ctx, path, &strg)
 	if err != nil {
-		cc.HandleError(fmt.Errorf("could not get storage controller summary: %w", err), span)
+		cc.HandleError(fmt.Errorf("could not get storage controller summary: %w", err))
 		return
 	}
 
@@ -88,16 +73,11 @@ func collectStorageController(ctx context.Context, path string, cc *common.Colle
 }
 
 func collectSmartStorage(ctx context.Context, parentPath string, cc *common.CollectorContext) {
-	ctx, span := cc.Tracer().Start(ctx, "Storage.CollectSmartStorage", trace.WithAttributes(
-		attribute.String("parent_path", parentPath),
-	))
-	defer span.End()
-
 	p := parentPath + "/SmartStorage/ArrayControllers/"
 	crtls := common.MemberList{}
 	err := cc.Client().Get(ctx, p, &crtls)
 	if err != nil {
-		cc.HandleError(fmt.Errorf("could not get smart storage controller summary: %w", err), span)
+		cc.HandleError(fmt.Errorf("could not get smart storage controller summary: %w", err))
 		return
 	}
 
@@ -107,11 +87,6 @@ func collectSmartStorage(ctx context.Context, parentPath string, cc *common.Coll
 }
 
 func collectSmartStorageController(ctx context.Context, path string, cc *common.CollectorContext) {
-	ctx, span := cc.Tracer().Start(ctx, "Storage.CollectSmartController", trace.WithAttributes(
-		attribute.String("path", path),
-	))
-	defer span.End()
-
 	// In some cases the path does not have the expected trailing slash, so
 	// we add it here if needed
 	slash := ""
@@ -123,7 +98,7 @@ func collectSmartStorageController(ctx context.Context, path string, cc *common.
 	drives := common.MemberList{}
 	err := cc.Client().Get(ctx, p, &drives)
 	if err != nil {
-		cc.HandleError(fmt.Errorf("could not get drives for controller %s: %w", path, err), span)
+		cc.HandleError(fmt.Errorf("could not get drives for controller %s: %w", path, err))
 		return
 	}
 
@@ -133,15 +108,10 @@ func collectSmartStorageController(ctx context.Context, path string, cc *common.
 }
 
 func collectDiskDrive(ctx context.Context, path string, cc *common.CollectorContext) {
-	ctx, span := cc.Tracer().Start(ctx, "Storage.CollectDisk", trace.WithAttributes(
-		attribute.String("path", path),
-	))
-	defer span.End()
-
 	d := DiskDrive{}
 	err := cc.Client().Get(ctx, path, &d)
 	if err != nil {
-		cc.HandleError(fmt.Errorf("could not get drive information from %s: %w", path, err), span)
+		cc.HandleError(fmt.Errorf("could not get drive information from %s: %w", path, err))
 		return
 	}
 

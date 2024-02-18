@@ -9,9 +9,6 @@ import (
 	"fmt"
 	"strings"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/MauveSoftware/ilo_exporter/pkg/common"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -49,17 +46,14 @@ func Describe(ch chan<- *prometheus.Desc) {
 func Collect(parentPath string, cc *common.CollectorContext) {
 	defer cc.WaitGroup().Done()
 
-	ctx, span := cc.Tracer().Start(cc.RootCtx(), "Memory.Collect", trace.WithAttributes(
-		attribute.String("parent_path", parentPath),
-	))
-	defer span.End()
+	ctx := cc.RootCtx()
 
 	p := parentPath + "/Memory"
 	mem := common.MemberList{}
 
 	err := cc.Client().Get(ctx, p, &mem)
 	if err != nil {
-		cc.HandleError(fmt.Errorf("could not get memory summary: %w", err), span)
+		cc.HandleError(fmt.Errorf("could not get memory summary: %w", err))
 		return
 	}
 
@@ -73,18 +67,13 @@ func Collect(parentPath string, cc *common.CollectorContext) {
 func collectForDIMM(ctx context.Context, link string, cc *common.CollectorContext) {
 	defer cc.WaitGroup().Done()
 
-	ctx, span := cc.Tracer().Start(ctx, "Memory.CollectForDIMM", trace.WithAttributes(
-		attribute.String("path", link),
-	))
-	defer span.End()
-
 	i := strings.Index(link, "Systems/")
 	p := link[i:]
 
 	d := MemoryDIMM{}
 	err := cc.Client().Get(ctx, p, &d)
 	if err != nil {
-		cc.HandleError(fmt.Errorf("could not get memory information from %s: %w", link, err), span)
+		cc.HandleError(fmt.Errorf("could not get memory information from %s: %w", link, err))
 		return
 	}
 

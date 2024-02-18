@@ -36,14 +36,3 @@
 #  enabled: false
 #  cert_chain_path: ""
 #  key_path: ""
-
-# Tracing Options
-#
-# If tracing is enabled, you must specify the provider and and collector
-# endpoint.
-###############################################################################
-#
-#tracing:
-#  enabled: false
-#  provider: ""
-#  collector_endpoint: ""

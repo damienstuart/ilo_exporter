@@ -13,7 +13,6 @@ import (
 	"github.com/MauveSoftware/ilo_exporter/pkg/client"
 	"github.com/MauveSoftware/ilo_exporter/pkg/common"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -25,18 +24,16 @@ var (
 )
 
 // NewCollector returns a new collector for chassis metrics
-func NewCollector(ctx context.Context, cl client.Client, tracer trace.Tracer) prometheus.Collector {
+func NewCollector(ctx context.Context, cl client.Client) prometheus.Collector {
 	return &collector{
 		rootCtx: ctx,
 		cl:      cl,
-		tracer:  tracer,
 	}
 }
 
 type collector struct {
 	rootCtx context.Context
 	cl      client.Client
-	tracer  trace.Tracer
 }
 
 // Describe implements prometheus.Collector interface
@@ -50,12 +47,10 @@ func (c *collector) Describe(ch chan<- *prometheus.Desc) {
 func (c *collector) Collect(ch chan<- prometheus.Metric) {
 	start := time.Now()
 
-	ctx, span := c.tracer.Start(c.rootCtx, "Chassis.Collect")
-	defer span.End()
-
 	p := "Chassis/1"
 
-	cc := common.NewCollectorContext(ctx, c.cl, ch, c.tracer)
+	ctx := c.rootCtx
+	cc := common.NewCollectorContext(ctx, c.cl, ch)
 	power.Collect(ctx, p, cc)
 	thermal.Collect(ctx, p, cc)
 

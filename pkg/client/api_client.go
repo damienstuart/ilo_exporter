@@ -13,9 +13,6 @@ import (
 	"net/http"
 	"strings"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/sirupsen/logrus"
@@ -27,7 +24,6 @@ type APIClient struct {
 	hostName string
 	username string
 	password string
-	tracer   trace.Tracer
 	client   *http.Client
 	debug    bool
 	sem      *semaphore.Weighted
@@ -61,14 +57,13 @@ func WithMaxConcurrentRequests(max uint) ClientOption {
 }
 
 // NewClient creates a new client instance
-func NewClient(hostName, username, password string, tracer trace.Tracer, debug bool, opts ...ClientOption) Client {
+func NewClient(hostName, username, password string, debug bool, opts ...ClientOption) Client {
 	cl := &APIClient{
 		url:      fmt.Sprintf("https://%s/redfish/v1/", hostName),
 		hostName: hostName,
 		username: username,
 		password: password,
 		client:   &http.Client{},
-		tracer:   tracer,
 		debug:    debug,
 		sem:      semaphore.NewWeighted(1),
 	}
@@ -104,17 +99,10 @@ func (cl *APIClient) get(ctx context.Context, path string) ([]byte, error) {
 
 	uri := strings.Trim(cl.url, "/") + "/" + strings.Trim(path, "/")
 
-	_, span := cl.tracer.Start(ctx, "Client.Get", trace.WithAttributes(
-		attribute.String("URI", uri),
-	))
-	defer span.End()
-
 	logrus.Infof("GET %s", uri)
 
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -123,15 +111,11 @@ func (cl *APIClient) get(ctx context.Context, path string) ([]byte, error) {
 
 	resp, err := cl.client.Do(req)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, resp.Status)
 		return nil, fmt.Errorf(resp.Status)
 	}
 
@@ -144,8 +128,6 @@ func (cl *APIClient) get(ctx context.Context, path string) ([]byte, error) {
 		logrus.Infof("Status Code: %s", resp.Status)
 		logrus.Infof("Response: %s", string(b))
 	}
-
-	span.SetStatus(codes.Ok, "")
 
 	return b, err
 }

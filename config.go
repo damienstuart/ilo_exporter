@@ -33,17 +33,10 @@ type TlsConfig struct {
 	KeyPath       string `yaml:"key_path,omitempty"`
 }
 
-type TracingConfig struct {
-	Enabled           bool   `yaml:"enabled,omitempty"`
-	Provider          string `yaml:"provider,omitempty"`
-	CollectorEndpoint string `yaml:"collector_endpoint,omitempty"`
-}
-
 type Config struct {
-	Web     WebConfig     `yaml:"web,omitempty"`
-	Api     ApiConfig     `yaml:"api,omitempty"`
-	Tls     TlsConfig     `yaml:"tls,omitempty"`
-	Tracing TracingConfig `yaml:"tracing,omitempty"`
+	Web WebConfig `yaml:"web,omitempty"`
+	Api ApiConfig `yaml:"api,omitempty"`
+	Tls TlsConfig `yaml:"tls,omitempty"`
 }
 
 var conf *Config
@@ -65,11 +58,6 @@ func DefaultConfig() *Config {
 			Enabled:       false,
 			CertChainPath: "",
 			KeyPath:       "",
-		},
-		TracingConfig{
-			Enabled:           false,
-			Provider:          "",
-			CollectorEndpoint: "",
 		},
 	}
 
@@ -107,9 +95,6 @@ func initConfig() {
 	tlsEnabled := flag.Bool("tls.enabled", false, "Enables TLS")
 	tlsCertChainPath := flag.String("tls.cert-file", "", "Path to TLS cert file.")
 	tlsKeyPath := flag.String("tls.key-file", "", "Path to TLS key file")
-	tracingEnabled := flag.Bool("tracing.enabled", false, "Enables tracing using OpenTelemetry.")
-	tracingProvider := flag.String("tracing.provider", "", "Sets the tracing provider (stdout or collector).")
-	tracingCollectorEndpoint := flag.String("tracing.collector.grpc-endpoint", "", "Sets the tracing provider (stdout or collector).")
 
 	flag.Parse()
 
@@ -157,14 +142,5 @@ func initConfig() {
 	}
 	if *tlsKeyPath != "" {
 		conf.Tls.KeyPath = *tlsKeyPath
-	}
-	if *tracingEnabled {
-		conf.Tracing.Enabled = *tracingEnabled
-	}
-	if *tracingProvider != "" {
-		conf.Tracing.Provider = *tracingProvider
-	}
-	if *tracingCollectorEndpoint != "" {
-		conf.Tracing.CollectorEndpoint = *tracingCollectorEndpoint
 	}
 }

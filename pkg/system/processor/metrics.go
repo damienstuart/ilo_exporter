@@ -11,8 +11,6 @@ import (
 
 	"github.com/MauveSoftware/ilo_exporter/pkg/common"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -48,16 +46,13 @@ func Describe(ch chan<- *prometheus.Desc) {
 func Collect(parentPath string, cc *common.CollectorContext) {
 	defer cc.WaitGroup().Done()
 
-	ctx, span := cc.Tracer().Start(cc.RootCtx(), "Processor.Collect", trace.WithAttributes(
-		attribute.String("parent_path", parentPath),
-	))
-	defer span.End()
+	ctx := cc.RootCtx()
 
 	p := parentPath + "/Processors"
 	procs := common.MemberList{}
 	err := cc.Client().Get(ctx, p, &procs)
 	if err != nil {
-		cc.HandleError(fmt.Errorf("could not get processor summary: %w", err), span)
+		cc.HandleError(fmt.Errorf("could not get processor summary: %w", err))
 		return
 	}
 
@@ -71,15 +66,10 @@ func Collect(parentPath string, cc *common.CollectorContext) {
 }
 
 func collectForProcessor(ctx context.Context, link string, cc *common.CollectorContext) {
-	ctx, span := cc.Tracer().Start(ctx, "Storage.CollectProcessor", trace.WithAttributes(
-		attribute.String("path", link),
-	))
-	defer span.End()
-
 	pr := Processor{}
 	err := cc.Client().Get(ctx, link, &pr)
 	if err != nil {
-		cc.HandleError(fmt.Errorf("could not get processor information from %s: %w", link, err), span)
+		cc.HandleError(fmt.Errorf("could not get processor information from %s: %w", link, err))
 		return
 	}
 

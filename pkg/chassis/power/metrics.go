@@ -10,8 +10,6 @@ import (
 
 	"github.com/MauveSoftware/ilo_exporter/pkg/common"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -53,15 +51,10 @@ func Describe(ch chan<- *prometheus.Desc) {
 }
 
 func Collect(ctx context.Context, parentPath string, cc *common.CollectorContext) {
-	ctx, span := cc.Tracer().Start(ctx, "Power.Collect", trace.WithAttributes(
-		attribute.String("parent_path", parentPath),
-	))
-	defer span.End()
-
 	pwr := Power{}
 	err := cc.Client().Get(ctx, parentPath+"/Power", &pwr)
 	if err != nil {
-		cc.HandleError(fmt.Errorf("could not get power data: %w", err), span)
+		cc.HandleError(fmt.Errorf("could not get power data: %w", err))
 	}
 
 	l := []string{cc.Client().HostName()}
