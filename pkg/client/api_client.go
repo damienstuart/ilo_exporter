@@ -61,7 +61,7 @@ func WithMaxConcurrentRequests(max uint) ClientOption {
 }
 
 // NewClient creates a new client instance
-func NewClient(hostName, username, password string, tracer trace.Tracer, opts ...ClientOption) Client {
+func NewClient(hostName, username, password string, tracer trace.Tracer, debug bool, opts ...ClientOption) Client {
 	cl := &APIClient{
 		url:      fmt.Sprintf("https://%s/redfish/v1/", hostName),
 		hostName: hostName,
@@ -69,6 +69,7 @@ func NewClient(hostName, username, password string, tracer trace.Tracer, opts ..
 		password: password,
 		client:   &http.Client{},
 		tracer:   tracer,
+		debug:    debug,
 		sem:      semaphore.NewWeighted(1),
 	}
 

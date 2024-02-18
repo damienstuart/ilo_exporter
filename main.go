@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -25,57 +24,21 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const version string = "1.0.2"
-
-var (
-	showVersion              = flag.Bool("version", false, "Print version information.")
-	listenAddress            = flag.String("web.listen-address", ":9545", "Address on which to expose metrics and web interface.")
-	metricsPath              = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
-	username                 = flag.String("api.username", "", "Username")
-	password                 = flag.String("api.password", "", "Password")
-	maxConcurrentRequests    = flag.Uint("api.max-concurrent-requests", 4, "Maximum number of requests sent against API concurrently")
-	tlsEnabled               = flag.Bool("tls.enabled", false, "Enables TLS")
-	tlsCertChainPath         = flag.String("tls.cert-file", "", "Path to TLS cert file")
-	tlsKeyPath               = flag.String("tls.key-file", "", "Path to TLS key file")
-	tracingEnabled           = flag.Bool("tracing.enabled", false, "Enables tracing using OpenTelemetry")
-	tracingProvider          = flag.String("tracing.provider", "", "Sets the tracing provider (stdout or collector)")
-	tracingCollectorEndpoint = flag.String("tracing.collector.grpc-endpoint", "", "Sets the tracing provider (stdout or collector)")
-)
-
-func init() {
-	flag.Usage = func() {
-		fmt.Println("Usage: ilo_exporter [ ... ]\n\nParameters:")
-		fmt.Println()
-		flag.PrintDefaults()
-	}
-}
-
 func main() {
-	flag.Parse()
+	initConfig()
 
-	if *showVersion {
-		printVersion()
-		os.Exit(0)
+	if conf.Tracing.Enabled {
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer cancel()
+
+		shutdownTracing, err := initTracing(ctx)
+		if err != nil {
+			log.Fatalf("could not initialize tracing: %v", err)
+		}
+		defer shutdownTracing()
 	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-
-	shutdownTracing, err := initTracing(ctx)
-	if err != nil {
-		log.Fatalf("could not initialize tracing: %v", err)
-	}
-	defer shutdownTracing()
 
 	startServer()
-}
-
-func printVersion() {
-	fmt.Println("ilo_exporter")
-	fmt.Printf("Version: %s\n", version)
-	fmt.Println("Author(s): Daniel Czerwonk")
-	fmt.Println("Copyright: 2022, Mauve Mailorder Software GmbH & Co. KG, Licensed under MIT license")
-	fmt.Println("Metric exporter for HP iLO")
 }
 
 func startServer() {
@@ -87,21 +50,21 @@ func startServer() {
 			<h1>iLO Exporter by Mauve Mailorder Software</h1>
 			<h2>Example</h2>
 			<p>Metrics for host 172.16.0.200</p>
-			<p><a href="` + *metricsPath + `?host=172.16.0.200">` + r.Host + *metricsPath + `?host=172.16.0.200</a></p>
+			<p><a href="` + conf.Web.MetricsPath + `?host=172.16.0.200">` + r.Host + conf.Web.MetricsPath + `?host=172.16.0.200</a></p>
 			<h2>More information</h2>
 			<p><a href="https://github.com/MauveSoftware/ilo_exporter">github.com/MauveSoftware/ilo_exporter</a></p>
 			</body>
 			</html>`))
 	})
-	http.HandleFunc(*metricsPath, errorHandler(handleMetricsRequest))
+	http.HandleFunc(conf.Web.MetricsPath, errorHandler(handleMetricsRequest))
 
-	logrus.Infof("Listening for %s on %s (TLS: %v)", *metricsPath, *listenAddress, *tlsEnabled)
-	if *tlsEnabled {
-		logrus.Fatal(http.ListenAndServeTLS(*listenAddress, *tlsCertChainPath, *tlsKeyPath, nil))
+	logrus.Infof("Listening for %s on %s (TLS: %v)", conf.Web.MetricsPath, conf.Web.ListenAddress, conf.Tls.Enabled)
+	if conf.Tls.Enabled {
+		logrus.Fatal(http.ListenAndServeTLS(conf.Web.ListenAddress, conf.Tls.CertChainPath, conf.Tls.KeyPath, nil))
 		return
 	}
 
-	logrus.Fatal(http.ListenAndServe(*listenAddress, nil))
+	logrus.Fatal(http.ListenAndServe(conf.Web.ListenAddress, nil))
 }
 
 func errorHandler(f func(http.ResponseWriter, *http.Request) error) http.HandlerFunc {
@@ -118,14 +81,16 @@ func errorHandler(f func(http.ResponseWriter, *http.Request) error) http.Handler
 func handleMetricsRequest(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
 	host := q.Get("host")
-	user := q.Get("user")
-	pass := q.Get("pass")
 
+	// If username and/or password is provided as a request parameter, use
+	// them. Otherwise fallback to the ones provided at startup (if any).
+	user := q.Get("user")
 	if user == "" {
-		user = *username
+		user = conf.Api.Username
 	}
+	pass := q.Get("pass")
 	if pass == "" {
-		pass = *password
+		pass = conf.Api.Password
 	}
 
 	ctx, span := tracer.Start(r.Context(), "HandleMetricsRequest", trace.WithAttributes(
@@ -139,7 +104,11 @@ func handleMetricsRequest(w http.ResponseWriter, r *http.Request) error {
 
 	reg := prometheus.NewRegistry()
 
-	cl := client.NewClient(host, user, pass, tracer, client.WithMaxConcurrentRequests(*maxConcurrentRequests), client.WithInsecure(), client.WithDebug())
+	cl := client.NewClient(
+		host, user, pass, tracer, conf.Api.Debug,
+		client.WithMaxConcurrentRequests(conf.Api.MaxConcurrentRequests),
+		client.WithInsecure())
+
 	reg.MustRegister(system.NewCollector(ctx, cl, tracer))
 	reg.MustRegister(manager.NewCollector(ctx, cl, tracer))
 	reg.MustRegister(chassis.NewCollector(ctx, cl, tracer))

@@ -28,17 +28,17 @@ var (
 )
 
 func initTracing(ctx context.Context) (func(), error) {
-	if !*tracingEnabled {
+	if !conf.Tracing.Enabled {
 		return initTracingWithNoop()
 	}
 
-	switch *tracingProvider {
+	switch conf.Tracing.Provider {
 	case "stdout":
 		return initTracingToStdOut(ctx)
 	case "collector":
 		return initTracingToCollector(ctx)
 	default:
-		log.Warnf("got invalid value for tracing.provider: %s, disable tracing", *tracingProvider)
+		log.Warnf("got invalid value for tracing.provider: %s, disable tracing", conf.Tracing.Provider)
 		return initTracingWithNoop()
 	}
 }
@@ -68,11 +68,11 @@ func initTracingToStdOut(ctx context.Context) (func(), error) {
 }
 
 func initTracingToCollector(ctx context.Context) (func(), error) {
-	log.Infof("Initialize tracing (agent: %s)", *tracingCollectorEndpoint)
+	log.Infof("Initialize tracing (agent: %s)", conf.Tracing.CollectorEndpoint)
 
 	cl := otlptracegrpc.NewClient(
 		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(*tracingCollectorEndpoint),
+		otlptracegrpc.WithEndpoint(conf.Tracing.CollectorEndpoint),
 	)
 	exp, err := otlptrace.New(ctx, cl)
 	if err != nil {
