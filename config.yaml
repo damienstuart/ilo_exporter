@@ -1,0 +1,49 @@
+# Config YAML for iLO Exporter
+#
+# The commented entries below show default values if not specified here
+# or from the command-line. You can uncomment and change for your needs.
+###############################################################################
+
+# Web server options
+###############################################################################
+#
+#web:
+#  listen_address: ":5945"   # The IP and port on which to listen for requests 
+#  metrics_path: "/metrics"  # Request path for metrics
+
+# iLO API Options
+#
+# Username and password for the iLO API can be specified here and/or as
+# parameters in the web requests to the API. Those passed in the web request
+# will override the credentials set here.
+#
+# Setting debug to true will cause the requests and responses to be printed to
+# the logging output.
+###############################################################################
+#
+#api:
+#  username: ""
+#  password: ""
+#  max_concurrent_requests: 4  # Maximum concurrent requests to the iLO API
+#  debug: false
+
+# TLS Options
+#
+# If TLS is enabled, you must specify the key and cert_chain paths.
+###############################################################################
+#
+#tls:
+#  enabled: false
+#  cert_chain_path: ""
+#  key_path: ""
+
+# Tracing Options
+#
+# If tracing is enabled, you must specify the provider and and collector
+# endpoint.
+###############################################################################
+#
+#tracing:
+#  enabled: false
+#  provider: ""
+#  collector_endpoint: ""
