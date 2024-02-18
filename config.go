@@ -45,7 +45,7 @@ var conf *Config
 func DefaultConfig() *Config {
 	defConf := Config{
 		WebConfig{
-			ListenAddress: ":5945",
+			ListenAddress: ":9545",
 			MetricsPath:   "/metrics",
 		},
 		ApiConfig{

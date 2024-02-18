@@ -8,7 +8,7 @@
 ###############################################################################
 #
 #web:
-#  listen_address: ":5945"   # The IP and port on which to listen for requests 
+#  listen_address: ":9545"   # The IP and port on which to listen for requests 
 #  metrics_path: "/metrics"  # Request path for metrics
 
 # iLO API Options
