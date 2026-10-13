@@ -34,14 +34,15 @@ type Server struct {
 	srv  *httptest.Server
 	root *os.Root
 
-	username string
-	password string
+	username     string
+	password     string
+	noBasicAuth  bool
 	expand       bool
 	expandStatus int
 	latency      time.Duration
-	status   map[string]int
-	block    map[string]bool
-	hidden   map[string]map[string]bool
+	status       map[string]int
+	block        map[string]bool
+	hidden       map[string]map[string]bool
 
 	mu          sync.Mutex
 	conns       int
@@ -61,6 +62,13 @@ func WithCredentials(username, password string) Option {
 	return func(s *Server) {
 		s.username = username
 		s.password = password
+	}
+}
+
+// WithoutBasicAuth rejects basic authentication (like iLOs with HTTPBasicAuth disabled), so sessions are required
+func WithoutBasicAuth() Option {
+	return func(s *Server) {
+		s.noBasicAuth = true
 	}
 }
 
@@ -333,6 +341,10 @@ func (s *Server) authorized(r *http.Request) bool {
 				return true
 			}
 		}
+		return false
+	}
+
+	if s.noBasicAuth {
 		return false
 	}
 
