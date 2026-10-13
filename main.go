@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -27,7 +28,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
+	"github.com/prometheus/common/promslog"
 )
 
 // version is set at build time using -ldflags "-X main.version=..."
@@ -48,11 +49,24 @@ var (
 	tracingProvider          = flag.String("tracing.provider", "", "Sets the tracing provider (stdout or collector)")
 	tracingCollectorEndpoint = flag.String("tracing.collector.grpc-endpoint", "", "Sets the gRPC endpoint of the OpenTelemetry collector")
 	allowedTargets           = flag.String("web.allowed-targets", "", "Comma separated list of host names, IP addresses and CIDR prefixes which may be scraped (empty: all)")
+	logRedfishBodies         = flag.Bool("log.redfish-bodies", false, "Log the body of every Redfish response (requires -log.level=debug)")
+	logLevel                 = promslog.NewLevel()
+	logFormat                = promslog.NewFormat()
 )
 
-var targets *targetFilter
+var (
+	targets *targetFilter
+	logger  = promslog.NewNopLogger()
+	// errorLog receives errors of the Prometheus HTTP handler
+	errorLog promhttp.Logger
+)
 
 func init() {
+	_ = logLevel.Set("info")
+	_ = logFormat.Set("logfmt")
+	flag.Var(logLevel, "log.level", "Only log messages with the given severity or above. One of: [debug, info, warn, error]")
+	flag.Var(logFormat, "log.format", "Output format of log messages. One of: [logfmt, json]")
+
 	flag.Usage = func() {
 		fmt.Println("Usage: ilo_exporter [ ... ]\n\nParameters:")
 		fmt.Println()
@@ -77,6 +91,9 @@ func main() {
 		os.Exit(0)
 	}
 
+	logger = promslog.New(&promslog.Config{Level: logLevel, Format: logFormat})
+	errorLog = slog.NewLogLogger(logger.Handler(), slog.LevelWarn)
+
 	var err error
 	targets, err = parseTargetFilter(*allowedTargets)
 	if err != nil {
@@ -90,15 +107,15 @@ func run() int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	shutdownTracing, err := initTracing(ctx)
+	shutdownTracing, err := initTracing(ctx, logger)
 	if err != nil {
-		logrus.Errorf("could not initialize tracing: %v", err)
+		logger.Error("Could not initialize tracing", "err", err)
 		return 1
 	}
 	defer shutdownTracing()
 
 	if err := startServer(ctx); err != nil {
-		logrus.Error(err)
+		logger.Error("Server failed", "err", err)
 		return 1
 	}
 
@@ -114,7 +131,7 @@ func printVersion() {
 }
 
 func startServer(ctx context.Context) error {
-	logrus.Infof("Starting iLO exporter (Version: %s)", version)
+	logger.Info("Starting iLO exporter", "version", version)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, err := w.Write([]byte(`<html>
 			<head><title>iLO Exporter (Version ` + version + `)</title></head>
@@ -128,12 +145,12 @@ func startServer(ctx context.Context) error {
 			</body>
 			</html>`))
 		if err != nil {
-			logrus.Errorf("failed to write response: %v", err)
+			logger.Debug("Failed to write response", "err", err)
 		}
 	})
 	http.HandleFunc(*metricsPath, errorHandler(handleMetricsRequest))
 
-	logrus.Infof("Listening for %s on %s (TLS: %v)", *metricsPath, *listenAddress, *tlsEnabled)
+	logger.Info("Listening", "address", *listenAddress, "path", *metricsPath, "tls", *tlsEnabled)
 	srv := &http.Server{
 		Addr:              *listenAddress,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -159,7 +176,7 @@ func startServer(ctx context.Context) error {
 	case <-ctx.Done():
 	}
 
-	logrus.Info("Shutting down")
+	logger.Info("Shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -194,9 +211,9 @@ func errorHandler(f func(http.ResponseWriter, *http.Request) error) http.Handler
 		}
 
 		if code < http.StatusInternalServerError {
-			logrus.Debugf("rejected request from %s: %v", r.RemoteAddr, err)
+			logger.Debug("Rejected request", "remote", r.RemoteAddr, "err", err)
 		} else {
-			logrus.Errorln(err)
+			logger.Error("Request failed", "remote", r.RemoteAddr, "err", err)
 		}
 
 		http.Error(w, err.Error(), code)
@@ -220,16 +237,27 @@ func handleMetricsRequest(w http.ResponseWriter, r *http.Request) error {
 
 	reg := prometheus.NewRegistry()
 
-	cl := client.NewClient(host, *username, *password, tracer, client.WithMaxConcurrentRequests(*maxConcurrentRequests), client.WithInsecure(), client.WithDebug())
+	opts := []client.ClientOption{
+		client.WithMaxConcurrentRequests(*maxConcurrentRequests),
+		client.WithInsecure(),
+		client.WithLogger(logger.With("host", host)),
+	}
+	if *logRedfishBodies {
+		opts = append(opts, client.WithResponseLogging())
+	}
+
+	cl := client.NewClient(host, *username, *password, tracer, opts...)
 	reg.MustRegister(system.NewCollector(ctx, cl, tracer))
 	reg.MustRegister(manager.NewCollector(ctx, cl, tracer))
 	reg.MustRegister(chassis.NewCollector(ctx, cl, tracer))
 
-	l := logrus.New()
-	l.Level = logrus.ErrorLevel
-
 	promhttp.HandlerFor(reg, promhttp.HandlerOpts{
-		ErrorLog:      l,
+		ErrorLog:      errorLog,
 		ErrorHandling: promhttp.ContinueOnError}).ServeHTTP(w, r)
+
+	if n, err := cl.Failures(); n > 0 {
+		logger.Warn("Scrape incomplete", "host", host, "failed_requests", n, "err", err)
+	}
+
 	return nil
 }
