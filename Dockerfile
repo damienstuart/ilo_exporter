@@ -3,6 +3,7 @@ FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine3.24@sha256:85dc1069ac644ea3c
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
+ARG VERSION
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -14,7 +15,7 @@ COPY pkg ./pkg
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
   GOARM=${TARGETVARIANT#v} \
   go build -trimpath \
-  -ldflags="-s -w" \
+  -ldflags="-s -w ${VERSION:+-X main.version=${VERSION}}" \
   -o /out/ilo_exporter .
 
 

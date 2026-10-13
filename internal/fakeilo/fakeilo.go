@@ -15,7 +15,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -27,8 +27,8 @@ const prefix = "/redfish/v1"
 
 // Server is a fake iLO Redfish service
 type Server struct {
-	srv *httptest.Server
-	dir string
+	srv  *httptest.Server
+	root *os.Root
 
 	username string
 	password string
@@ -102,8 +102,14 @@ func WithoutProperty(path, property string) Option {
 func New(t testing.TB, dir string, opts ...Option) *Server {
 	t.Helper()
 
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatalf("could not open mockup: %v", err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+
 	s := &Server{
-		dir:      dir,
+		root:     root,
 		expand:   true,
 		status:   make(map[string]int),
 		block:    make(map[string]bool),
@@ -332,7 +338,7 @@ func (s *Server) ExpireSessions() {
 
 func (s *Server) load(p string) (map[string]any, error) {
 	rel := strings.TrimPrefix(strings.TrimPrefix(p, prefix), "/")
-	b, err := os.ReadFile(filepath.Join(s.dir, filepath.FromSlash(rel), "index.json"))
+	b, err := s.root.ReadFile(path.Join(rel, "index.json"))
 	if err != nil {
 		return nil, err
 	}
