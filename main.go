@@ -61,7 +61,7 @@ var (
 func init() {
 	_ = logLevel.Set("info")
 	_ = logFormat.Set("logfmt")
-	flag.Var(logLevel, "log.level", "Only log messages with the given severity or above. One of: [debug, info, warn, error]")
+	flag.Var(levelFlag{logLevel}, "log.level", "Only log messages with the given severity or above. One of: [debug, info, warn, error]")
 	flag.Var(logFormat, "log.format", "Output format of log messages. One of: [logfmt, json]")
 
 	flag.Usage = func() {
@@ -69,6 +69,19 @@ func init() {
 		fmt.Println()
 		flag.PrintDefaults()
 	}
+}
+
+// levelFlag wraps promslog.Level, since flag.PrintDefaults can not print its zero value
+type levelFlag struct {
+	*promslog.Level
+}
+
+func (l levelFlag) String() string {
+	if l.Level == nil {
+		return ""
+	}
+
+	return l.Level.String()
 }
 
 func main() {
