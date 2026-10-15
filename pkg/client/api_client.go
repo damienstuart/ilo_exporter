@@ -28,8 +28,9 @@ const (
 	maxResponseSize = 32 << 20
 
 	// maxNotReadyRetries limits the retries of requests for resources which are not ready yet. iLO 5 keeps the
-	// data of some resources fresh for a few seconds only, so a retry is not ready again now and then.
-	maxNotReadyRetries = 3
+	// data of some resources fresh for a few seconds only, so about every other request is not ready, with
+	// longer streaks now and then (seen with iLO 5 v2.72 and v2.81).
+	maxNotReadyRetries = 5
 
 	// maxNotReadyDelay limits the time to wait before retrying a request for a resource which is not ready yet
 	maxNotReadyDelay = 10 * time.Second

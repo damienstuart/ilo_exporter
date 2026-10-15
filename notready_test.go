@@ -93,7 +93,7 @@ func TestResourceNotReadyExpandFallback(t *testing.T) {
 }
 
 func TestResourceNotReadyGivesUp(t *testing.T) {
-	srv := fakeilo.New(t, mockupDir("ilo7-dl380a"), fakeilo.WithNotReady(notReadyPath, -1, 1))
+	srv := fakeilo.New(t, mockupDir("ilo7-dl380a"), fakeilo.WithNotReady(notReadyPath, -1, 0))
 	e := newTestExporter(t)
 
 	body := scrape(t, e, srv.Host())
@@ -104,9 +104,9 @@ func TestResourceNotReadyGivesUp(t *testing.T) {
 	if !strings.Contains(body, "ilo_storage_disk_healthy") {
 		t.Error("expected drives of the other storage subsystems to be reported")
 	}
-	// one request with $expand, one without and 3 retries
-	if n := len(requestsOf(srv, "/Storage/DA000002")); n != 5 {
-		t.Errorf("expected the resource to be requested 5 times, got %d", n)
+	// one request with $expand, one without and 5 retries
+	if n := len(requestsOf(srv, "/Storage/DA000002")); n != 7 {
+		t.Errorf("expected the resource to be requested 7 times, got %d", n)
 	}
 
 	srv.ResetRequests()
