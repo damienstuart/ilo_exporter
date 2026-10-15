@@ -28,8 +28,9 @@ const (
 	// maxResponseSize limits the size of a response body read from the API
 	maxResponseSize = 32 << 20
 
-	// maxNotReadyRetries limits the retries of requests for resources which are not ready yet
-	maxNotReadyRetries = 2
+	// maxNotReadyRetries limits the retries of requests for resources which are not ready yet. iLO 5 keeps the
+	// data of some resources fresh for a few seconds only, so a retry is not ready again now and then.
+	maxNotReadyRetries = 3
 
 	// maxNotReadyDelay limits the time to wait before retrying a request for a resource which is not ready yet
 	maxNotReadyDelay = 10 * time.Second
@@ -265,7 +266,7 @@ func (cl *APIClient) do(ctx context.Context, uri string) ([]byte, error) {
 		b, err := cl.fetch(ctx, uri)
 
 		var he *HTTPError
-		if attempt < maxNotReadyRetries && errors.As(err, &he) && he.NotReady {
+		if attempt < maxNotReadyRetries && retryAllowed(ctx) && errors.As(err, &he) && he.NotReady {
 			delay := min(he.RetryAfter, maxNotReadyDelay)
 			cl.logger.Debug("Resource not ready", "uri", uri, "retry_after", delay)
 
@@ -276,6 +277,18 @@ func (cl *APIClient) do(ctx context.Context, uri string) ([]byte, error) {
 
 		return b, err
 	}
+}
+
+type noRetryKey struct{}
+
+// WithoutRetry returns a context for requests which are not retried if the resource is not ready yet,
+// e.g. because the caller falls back to other requests
+func WithoutRetry(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noRetryKey{}, true)
+}
+
+func retryAllowed(ctx context.Context) bool {
+	return ctx.Value(noRetryKey{}) == nil
 }
 
 // wait waits for d, unless ctx is done earlier or its deadline does not leave time for a request after waiting
