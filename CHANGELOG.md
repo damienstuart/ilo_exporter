@@ -30,7 +30,7 @@
   `23-HD Controller-I/O controller #41`), names occurring once are unchanged.
 - Requests for resources iLO has to retrieve from devices first (e.g. storage of NVMe drives managed by iLO 5)
   are answered with `400 Bad Request` (`iLO.2.x.ResourceNotReadyRetry`) until the data is available. These requests
-  are retried after the delay given by the iLO (max. 10s, up to 5 times and only if the scrape deadline allows),
+  are retried after the delay given by the iLO (max. 10s, up to 3 times and only if the scrape deadline allows),
   instead of failing the storage collector. Since iLO 5 keeps this data fresh for a few seconds only, such resources
   are rarely ready as a whole when requested with `$expand`: they are retrieved without `$expand` instead (members
   requested individually). Such responses no longer disable `$expand` for the iLO.
