@@ -5,6 +5,9 @@
 package main
 
 import (
+	"bytes"
+	"log/slog"
+	"strings"
 	"testing"
 )
 
@@ -53,7 +56,7 @@ func TestParseTarget(t *testing.T) {
 }
 
 func TestTargetFilter(t *testing.T) {
-	f, err := parseTargetFilter("10.0.0.0/8, ilo-01.Example.com,192.168.1.10,2001:db8::/32")
+	f, err := parseTargetFilter("10.0.0.0/8, ilo-01.Example.com,192.168.1.10,2001:db8::/32, .ILO.example.net, *.mgmt.example.org.")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,11 +67,22 @@ func TestTargetFilter(t *testing.T) {
 		"11.1.2.3":               false,
 		"ilo-01.example.com":     true,
 		"ILO-01.example.com:443": true,
+		"ilo-01.example.com.":    true,
 		"ilo-02.example.com":     false,
 		"192.168.1.10":           true,
 		"192.168.1.11":           false,
 		"[2001:db8::1]":          true,
 		"[2001:db9::1]:443":      false,
+
+		// domain suffixes match all hosts below the domain, but not the domain itself
+		"srv1.ilo.example.net":          true,
+		"SRV1.dc2.ilo.example.net:8443": true,
+		"srv1.ilo.example.net.":         true,
+		"ilo.example.net":               false,
+		"srv1ilo.example.net":           false,
+		"srv1.ilo.example.net.evil.com": false,
+		"srv1.mgmt.example.org":         true,
+		"mgmt.example.org":              false,
 	}
 
 	for addr, want := range tests {
@@ -82,7 +96,40 @@ func TestTargetFilter(t *testing.T) {
 		t.Error("nil filter should allow all targets")
 	}
 
-	if _, err := parseTargetFilter("10.0.0.0/33"); err == nil {
-		t.Error("expected error for invalid prefix")
+	for _, invalid := range []string{"10.0.0.0/33", ".", "*.", "*", ".10.0.0.1", ".exa mple.com", ".example..com", "*.ex/ample.com", "ilo 01.example.com"} {
+		if _, err := parseTargetFilter(invalid); err == nil {
+			t.Errorf("expected error for %q", invalid)
+		}
+	}
+}
+
+func TestTargetFilterSuffixDoesNotMatchIP(t *testing.T) {
+	f, err := parseTargetFilter(".1.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if f.allows("10.0.0.1") {
+		t.Error("domain suffix must not match IP addresses")
+	}
+}
+
+func TestLogTargetFilter(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+
+	logTargetFilter(logger, nil, "")
+	if out := buf.String(); !strings.Contains(out, "level=WARN") || !strings.Contains(out, "every host") {
+		t.Errorf("expected a warning without allowed targets, got %q", out)
+	}
+
+	buf.Reset()
+	f, err := parseTargetFilter(".ilo.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	logTargetFilter(logger, f, ".ilo.example.com")
+	if out := buf.String(); !strings.Contains(out, "level=INFO") || !strings.Contains(out, "allowed_targets=.ilo.example.com") {
+		t.Errorf("expected the allowed targets to be logged, got %q", out)
 	}
 }

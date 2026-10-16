@@ -35,7 +35,7 @@ var (
 	metricsPath              = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 	writeTimeout             = flag.Duration("web.write-timeout", 2*time.Minute, "Maximum duration for writing a response incl. collecting metrics from the API (0 disables the timeout)")
 	timeoutOffset            = flag.Duration("web.timeout-offset", 500*time.Millisecond, "Offset to subtract from the scrape timeout sent by Prometheus, leaving time to send the response")
-	allowedTargets           = flag.String("web.allowed-targets", "", "Comma separated list of host names, IP addresses and CIDR prefixes which may be scraped (empty: all)")
+	allowedTargets           = flag.String("web.allowed-targets", "", "Comma separated list of host names, domain suffixes (.example.com), IP addresses and CIDR prefixes which may be scraped (empty: all hosts, the configured credentials are sent to every requested host)")
 	username                 = flag.String("api.username", "", "Username")
 	apiAuth                  = flag.String("api.auth", "basic", "Authentication method: basic (credentials sent with every request) or session (one Redfish session per iLO, renewed when expired)")
 	password                 = flag.String("api.password", "", "Password")
@@ -200,6 +200,7 @@ func printVersion() {
 
 func startServer(ctx context.Context, e *exporter, logger *slog.Logger) error {
 	logger.Info("Starting iLO exporter", "version", version)
+	logTargetFilter(logger, e.targets, *allowedTargets)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

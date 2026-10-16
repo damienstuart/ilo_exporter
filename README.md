@@ -120,8 +120,16 @@ Note that each exporter instance uses one session per iLO. Sessions of an export
 remain until they time out (30 minutes by default).
 
 ## Security
-* The credentials configured are sent to every host requested via the `host` parameter. Use `-web.allowed-targets`
-  to restrict the hosts which can be scraped, e.g. `-web.allowed-targets=10.0.0.0/8,ilo-01.example.com`.
+* **The credentials configured are sent to every host requested via the `host` parameter.** Without
+  `-web.allowed-targets` anyone able to reach the exporter can request `?host=<a host of theirs>` and receive the
+  credentials, so a warning is logged at startup. Restrict the hosts which can be scraped, e.g.
+  `-web.allowed-targets=.ilo.example.com,10.0.0.0/8,ilo-01.example.net`:
+  * Entries starting with a dot (or `*.`) match all hosts in that domain: `.ilo.example.com` matches
+    `srv1.ilo.example.com` and `srv1.dc2.ilo.example.com`, but not `ilo.example.com` itself.
+  * Host names match exactly (case insensitive).
+  * IP addresses and CIDR prefixes only match targets given as IP address: host names are not resolved.
+
+  Also restrict network access to the exporter to the Prometheus servers scraping it.
 * iLO certificates are not verified by default, since iLOs typically use self signed certificates. Use
   `-api.insecure-skip-verify=false` and `-api.ca-file` to verify them.
 

@@ -77,7 +77,9 @@
   and deleted on shutdown or when the host is evicted from the cache (`-api.cache-max-hosts`). Session
   authentication is required for iLOs with basic authentication disabled.
 - Example alert rule `iLO Up` based on `ilo_up`. The `Power Up` alert no longer fires for unreachable iLOs.
-- `-web.allowed-targets` restricts the hosts which can be scraped to a list of host names, IP addresses and CIDR prefixes.
+- `-web.allowed-targets` restricts the hosts which can be scraped to a list of host names, domain suffixes
+  (`.example.com` or `*.example.com`), IP addresses and CIDR prefixes. Without it all hosts can be scraped as before
+  (the configured credentials are sent to every requested host); a warning is logged at startup.
 
 ### Changed
 
